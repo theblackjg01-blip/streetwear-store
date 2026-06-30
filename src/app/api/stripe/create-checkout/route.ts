@@ -22,6 +22,8 @@ export async function POST(req: Request) {
       quantity: item.quantity,
     }))
 
+    const productIds = items.map((item: any) => item.productId).join(",")
+
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       line_items: lineItems,
@@ -31,6 +33,7 @@ export async function POST(req: Request) {
       customer_email: user.email,
       metadata: {
         user_id: user.id,
+        product_ids: productIds,
       },
     })
 

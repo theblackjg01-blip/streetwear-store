@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { stripe } from "@/lib/stripe"
 import { createClient } from "@/lib/supabase/server"
+import type Stripe from "stripe"
 
 export async function POST(req: Request) {
   const body = await req.text()
@@ -14,15 +15,15 @@ export async function POST(req: Request) {
   }
 
   if (event.type === "checkout.session.completed") {
-    const session = event.data.object
+    const session = event.data.object as Stripe.Checkout.Session
     const supabase = await createClient()
 
     const userId = session.metadata?.user_id
-    const customerEmail = session.customer_email
     const total = (session.amount_total || 0) / 100
 
     if (!userId) return NextResponse.json({ error: "No user_id" }, { status: 400 })
 
+    const shipping = session.shipping_details
     const { data: order, error: orderError } = await supabase
       .from("orders")
       .insert({
@@ -30,13 +31,13 @@ export async function POST(req: Request) {
         status: "paid",
         total,
         stripe_session_id: session.id,
-        shipping_address: {
-          line1: session.shipping_details?.address?.line1 || "",
-          city: session.shipping_details?.address?.city || "",
-          state: session.shipping_details?.address?.state || "",
-          postal_code: session.shipping_details?.address?.postal_code || "",
-          country: session.shipping_details?.address?.country || "",
-        },
+        shipping_address: shipping ? {
+          line1: shipping.address?.line1 || "",
+          city: shipping.address?.city || "",
+          state: shipping.address?.state || "",
+          postal_code: shipping.address?.postal_code || "",
+          country: shipping.address?.country || "",
+        } : null,
       })
       .select()
       .single()
@@ -46,10 +47,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: orderError.message }, { status: 500 })
     }
 
+    const productIds = (session.metadata?.product_ids || "").split(",")
     const lineItems = await stripe.checkout.sessions.listLineItems(session.id)
-    const orderItems = lineItems.data.map((item) => ({
+    const orderItems = lineItems.data.map((item, idx) => ({
       order_id: order.id,
-      product_id: item.price?.product as string,
+      product_id: productIds[idx] || "",
       variant: {},
       quantity: item.quantity || 1,
       price_at_purchase: (item.amount_total || 0) / 100 / (item.quantity || 1),
