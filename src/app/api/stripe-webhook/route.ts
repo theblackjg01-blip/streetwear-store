@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server"
 import { stripe } from "@/lib/stripe"
 import { createClient } from "@/lib/supabase/server"
-import type Stripe from "stripe"
 
 export async function POST(req: Request) {
   const body = await req.text()
@@ -15,7 +14,7 @@ export async function POST(req: Request) {
   }
 
   if (event.type === "checkout.session.completed") {
-    const session = event.data.object as Stripe.Checkout.Session
+    const session = event.data.object as any
     const supabase = await createClient()
 
     const userId = session.metadata?.user_id
@@ -23,7 +22,8 @@ export async function POST(req: Request) {
 
     if (!userId) return NextResponse.json({ error: "No user_id" }, { status: 400 })
 
-    const shipping = session.shipping
+    const shipping = session.shipping || session.shipping_details
+    const address = shipping?.address
     const { data: order, error: orderError } = await supabase
       .from("orders")
       .insert({
@@ -31,12 +31,12 @@ export async function POST(req: Request) {
         status: "paid",
         total,
         stripe_session_id: session.id,
-        shipping_address: shipping?.address ? {
-          line1: shipping.address.line1 || "",
-          city: shipping.address.city || "",
-          state: shipping.address.state || "",
-          postal_code: shipping.address.postal_code || "",
-          country: shipping.address.country || "",
+        shipping_address: address ? {
+          line1: address.line1 || "",
+          city: address.city || "",
+          state: address.state || "",
+          postal_code: address.postal_code || "",
+          country: address.country || "",
         } : null,
       })
       .select()
