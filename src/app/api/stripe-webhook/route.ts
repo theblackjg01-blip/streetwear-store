@@ -23,7 +23,7 @@ export async function POST(req: Request) {
 
     if (!userId) return NextResponse.json({ error: "No user_id" }, { status: 400 })
 
-    const shipping = session.shipping_details
+    const shipping = session.shipping
     const { data: order, error: orderError } = await supabase
       .from("orders")
       .insert({
@@ -31,12 +31,12 @@ export async function POST(req: Request) {
         status: "paid",
         total,
         stripe_session_id: session.id,
-        shipping_address: shipping ? {
-          line1: shipping.address?.line1 || "",
-          city: shipping.address?.city || "",
-          state: shipping.address?.state || "",
-          postal_code: shipping.address?.postal_code || "",
-          country: shipping.address?.country || "",
+        shipping_address: shipping?.address ? {
+          line1: shipping.address.line1 || "",
+          city: shipping.address.city || "",
+          state: shipping.address.state || "",
+          postal_code: shipping.address.postal_code || "",
+          country: shipping.address.country || "",
         } : null,
       })
       .select()
